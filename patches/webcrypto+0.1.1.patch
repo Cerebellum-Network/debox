@@ -1,0 +1,13 @@
+diff --git a/node_modules/webcrypto/src/index.js b/node_modules/webcrypto/src/index.js
+index 7290f5d..2116449 100644
+--- a/node_modules/webcrypto/src/index.js
++++ b/node_modules/webcrypto/src/index.js
+@@ -3,7 +3,7 @@
+ const isNode = require('detect-node')
+ 
+ if (isNode) {
+-  module.exports = require('crypto')
++  module.exports = require('crypto-browserify')
+ } else {
+   module.exports = require('crypto-browserify')
+ }
