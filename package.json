@@ -8,6 +8,7 @@
     "@cere-ddc-sdk/util": "^1.0.4",
     "@emotion/react": "^11.7.1",
     "@emotion/styled": "^11.6.0",
+    "@mui/icons-material": "^5.4.2",
     "@mui/material": "^5.4.2",
     "@polkadot/keyring": "5.2.3",
     "@polkadot/util": "5.2.3",
@@ -34,8 +35,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "postinstall": "patch-package"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
@@ -60,6 +60,9 @@
     "babel-plugin-transform-class-properties": "^6.24.1"
   },
   "babel": {
-    "plugins": ["@babel/plugin-syntax-nullish-coalescing-operator", "babel-plugin-transform-class-properties"]
+    "plugins": [
+      "@babel/plugin-syntax-nullish-coalescing-operator",
+      "babel-plugin-transform-class-properties"
+    ]
   }
 }
