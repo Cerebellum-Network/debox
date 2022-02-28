@@ -4,6 +4,16 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+
+
+/*
+Scheme.createScheme("5HdpHDUpjNkFb7q4Y84wxDbiKRdxtxt7LqBF3p6MXQJVw1Zx").then(scheme => {
+    scheme.sign(stringToU8a("hello")).then(signature => {
+        console.log(signature)
+    })
+})
+*/
+
 ReactDOM.render(
   <React.StrictMode>
     <App />
