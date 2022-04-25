@@ -35,6 +35,8 @@ import {stringToU8a, u8aToHex, u8aToString} from "@polkadot/util";
 import {web3Accounts, web3Enable, web3FromAddress} from "@polkadot/extension-dapp";
 import {waitReady} from "@polkadot/wasm-crypto";
 import {decodeAddress} from "@polkadot/util-crypto";
+import {FileStorage} from "@cere-ddc-sdk/file-storage";
+import {FileStorageInterface} from "@cere-ddc-sdk/file-storage/dist/core/FileStorage.interface";
 
 const Input = styled('input')({
     display: 'none',
@@ -42,7 +44,7 @@ const Input = styled('input')({
 
 const defaultPath = "Files"
 
-const bucketId = BigInt(2)
+const bucketId = BigInt(10)
 
 class File {
     name: string = ""
@@ -53,7 +55,7 @@ class File {
     cid: string = ""
 }
 
-let privateKey = "0xc6bbaccc6ebb403c551efb5600e1ce46324d1887c1e04be71e253c752a6a41b2"
+let privateKey = "0x1202ca27415ff137b43ee08027b7a0f12dd51d0c17828ab1fc5cfc7269afd733"
 
 async function getContentAddressableStorage(mode: string): Promise<ContentAddressableStorage> {
     let scheme: SchemeInterface
@@ -61,8 +63,8 @@ async function getContentAddressableStorage(mode: string): Promise<ContentAddres
         await web3Enable("DEBOX")
         let accounts = await web3Accounts()
         console.log(accounts.length)
-        console.log(accounts.find(acc => acc.address === "5H9ezVeV3VZfKLYRbKHtdSErnUo4xrAFVadVnV7NPkCBKzZ1"))
-        let account = accounts.find(acc => acc.address === "5H9ezVeV3VZfKLYRbKHtdSErnUo4xrAFVadVnV7NPkCBKzZ1")!!
+        console.log(accounts.find(acc => acc.address === "5GmomkEekQQ3BipMvjDCG5bXKvzwhUDdXEcQqXRWmdkNCYkL"))
+        let account = accounts.find(acc => acc.address === "5GmomkEekQQ3BipMvjDCG5bXKvzwhUDdXEcQqXRWmdkNCYkL")!!
 
         await waitReady()
 
@@ -95,6 +97,12 @@ async function getContentAddressableStorage(mode: string): Promise<ContentAddres
     return new ContentAddressableStorage(scheme, "https://node-0.gateway.devnet.cere.network")
 }
 
+async function getFileStorage(): Promise<FileStorageInterface> {
+    let scheme = await Scheme.createScheme("sr25519", privateKey)
+
+    return new FileStorage(scheme, "https://node-0.gateway.devnet.cere.network")
+}
+
 function App() {
     const [path, setPath] = React.useState(defaultPath);
     const [open, setOpen] = React.useState(false);
@@ -119,7 +127,6 @@ function App() {
             bucketId: bucketId,
             tags: [{key: "Path", value: path}]
         }
-        console.log(query)
         let searchResult = await contentAddressableStorage!!.search(query)
         let files = searchResult.pieces.filter(p => p.tags.some(t => t.key === "Path" && t.value === path)).map(p => ({
             name: p.tags.find(t => t.key === "Name")?.value || "--",
@@ -141,15 +148,18 @@ function App() {
     }
 
     const downloadFile = async (name: string, cid: string) => {
-        let contentAddressableStorage = await getContentAddressableStorage(mode)
-        let file = await contentAddressableStorage.read(bucketId, cid)
+        let fileStorage = await getFileStorage()
+        let file = fileStorage.read(bucketId, cid)
+        let fileReader = file.getReader()
 
-        const url = window.URL.createObjectURL(
-            new Blob([file.data]),
-        );
+        let result;
+        let chunks = [];
+        while (!(result = await fileReader.read()).done) {
+            chunks.push(result.value)
+        }
+        const blob = new Blob(chunks);
+        const url = window.URL.createObjectURL(blob);
 
-        console.log("TAGS")
-        console.log(file.tags)
         const link = document.createElement('a');
         link.href = url;
         link.setAttribute(
@@ -185,9 +195,6 @@ function App() {
             partElements.push(<ArrowRightIcon color="primary"/>)
         }
 
-        console.log(path)
-        console.log(parts.length)
-        console.log(parts.length - 1)
         linkPath += parts[parts.length - 1]
         partElements.push(<Grid item alignItems="center" key={linkPath}>
             <Button variant="text" onClick={() => openFolder(linkPath)}> {parts[parts.length - 1]}</Button>
@@ -202,9 +209,9 @@ function App() {
 
             const piece: Piece = {
                 data: stringToU8a(folderName),
-                tags: [{key: "Type", value: "Folder"}, {key: "Name", value: folderName}, {key: "Path", value: path}]
+                tags: [{key: "Type", value: "Folder"}, {key: "Name", value: folderName}, {key: "Path", value: path}],
+                links: []
             };
-            console.log(piece)
             const pieceUri = await contentAddressableStorage!!.store(bucketId, piece)
             console.log("Folder. Stored piece uri=" + pieceUri.toString())
 
@@ -215,40 +222,26 @@ function App() {
 
     // On file select (from the pop up)
     const handleFileSelect = async ({target}: any) => {
-        console.log("On file select")
         let file = target.files[0];
-        console.log(file.name);
-        console.log(file);
-        console.log(file.value);
 
-        let reader = new FileReader();
-        reader.readAsArrayBuffer(file)
+        let contentAddressableStorage = await getContentAddressableStorage(mode)
+        let fileStorage = await getFileStorage()
 
-        reader.onload = async function (e) {
-            let contentAddressableStorage = await getContentAddressableStorage(mode)
+        let dataPieceUri = await fileStorage.upload(bucketId, file.stream())
+        console.log("File. Stored data piece uri=" + dataPieceUri.toString())
+        const metadataPiece: Piece = {
+            data: stringToU8a(dataPieceUri.cid),
+            tags: [{key: "Type", value: "File"}, {key: "Name", value: file.name}, {
+                key: "Path",
+                value: path
+            }, {key: "Size", value: file.size}],
+            links: []
+        };
 
-            let result = e.target!!.result;
-            let data = new Uint8Array(result as ArrayBuffer);
+        const metadataPieceUri = await contentAddressableStorage!!.store(bucketId, metadataPiece)
+        console.log("File. Stored metadata piece uri=" + metadataPieceUri.toString())
 
-            let dataPiece: Piece = {
-                data: data,
-                tags: []
-            };
-            let dataPieceUri = await contentAddressableStorage!!.store(bucketId, dataPiece)
-            console.log("File. Stored data piece uri=" + dataPieceUri.toString())
-            const metadataPiece: Piece = {
-                data: stringToU8a(dataPieceUri.cid),
-                tags: [{key: "Type", value: "File"}, {key: "Name", value: file.name}, {
-                    key: "Path",
-                    value: path
-                }, {key: "Size", value: file.size}]
-            };
-
-            const metadataPieceUri = await contentAddressableStorage!!.store(bucketId, metadataPiece)
-            console.log("File. Stored metadata piece uri=" + metadataPieceUri.toString())
-
-            loadFiles()
-        }
+        loadFiles()
     };
 
     if (mode === "") {
