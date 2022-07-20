@@ -1,3 +1,6 @@
 {
-  "plugins": ["babel-plugin-transform-class-properties", "@babel/plugin-syntax-nullish-coalescing-operator"]
+  "plugins": [
+    "babel-plugin-transform-class-properties",
+    "@babel/plugin-syntax-nullish-coalescing-operator"
+  ]
 }

@@ -31,6 +31,9 @@
     "**/*.spec.ts"
   ],
   "include": [
+    "craco.config.js",
+    ".eslintrc.js",
+    "server/**/*.js",
     "**/*.ts",
     "**/*.tsx"
   ]
