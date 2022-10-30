@@ -16,6 +16,7 @@ module.exports = {
         ignoreTemplateLiterals: true,
       },
     ],
+    'object-curly-newline': [2, { "consistent": true }],
     'react/react-in-jsx-scope': 0,
     'react/jsx-no-useless-fragment': 0,
     'import/prefer-default-export': 0,

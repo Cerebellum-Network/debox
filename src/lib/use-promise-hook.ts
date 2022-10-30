@@ -1,11 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function usePromiseHook<T>(fn: () => Promise<T>) {
   const [data, setData] = useState<T | undefined>();
   const [error, setError] = useState<unknown | undefined>();
-  const promise = useMemo(() => fn(), [fn]);
+  const [count, setCount] = useState(1);
+
   useEffect(() => {
-    let mounted = true;
+    const promise = new Promise<T>((resolve, reject) => {
+      try {
+        fn().then(resolve).catch(reject);
+      } catch (e) {
+        reject(Error('Uncaught'));
+      }
+    });
+    let mounted = count > 0;
     promise.then((result) => {
       if (mounted) {
         setData(result);
@@ -18,6 +26,6 @@ export function usePromiseHook<T>(fn: () => Promise<T>) {
     return () => {
       mounted = false;
     };
-  }, [promise]);
-  return { data, error };
+  }, [count, fn]);
+  return { data, error, mutate: () => setCount((state) => state + 1) };
 }

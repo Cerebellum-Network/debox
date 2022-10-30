@@ -1,4 +1,4 @@
-type KnowKey = 'publicKey' | 'secret';
+type KnowKey = 'address' | 'secret' | 'bucket';
 
 export function get(key: KnowKey): string | undefined {
   try {

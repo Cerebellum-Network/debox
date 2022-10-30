@@ -1,15 +1,10 @@
-import {
-  ChangeEvent, ReactElement, useCallback, useContext, useEffect, useMemo, useState,
-} from 'react';
+/* eslint-disable jsx-a11y/click-events-have-key-events */
+import { ChangeEvent, MouseEvent, ReactElement, useCallback, useContext, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
   ButtonGroup,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Grid,
   Paper,
   Stack,
@@ -19,35 +14,41 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
 } from '@mui/material';
-import FolderIcon from '@mui/icons-material/Folder';
-import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
-import { ArrowRight, MoreVert } from '@mui/icons-material';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, Folder, InsertDriveFile, MoreVert } from '@mui/icons-material';
+import filesize from 'file-size';
+import { stringToU8a } from '@polkadot/util';
+
 import { useStyles } from '../../styles';
 import { AppContext } from '../../app-context';
-import { File } from '../../file';
-import { AuthButton } from './auth-button';
-import { initClient, uploadFile } from '../../ddc-operations/operations';
-import { unwrap } from '../../unwrap';
+import { CreateClient } from './create-client';
+import { initClient } from '../../lib/ddc/operations';
+import { createFolder, loadFiles, readFile, uploadFile } from '../../lib/ddc/files';
+import { unwrap } from '../../lib/unwrap';
 import { BucketSelector } from './bucket-selector';
-import { createSuspender } from '../../create-suspender';
+import { createSuspender } from '../../lib/create-suspender';
+import { CreateFolder } from './create-folder';
+import { delay } from '../../lib/delay';
+import { useLoadFiles } from './use-load-files';
+import { ShareButton } from './share-button';
+import cereLogo from '../cere-logo.svg';
 
 const clientSuspender = createSuspender(initClient);
 
 export function Files(): ReactElement {
   const styles = useStyles();
-  const navigate = useNavigate();
-  const location = useLocation();
   const {
-    client, bucket, account, setAccount, setClient,
+    client,
+    bucket,
+    setBucket,
+    account,
+    setAccount,
+    setClient,
+    path,
+    setPath,
+    files,
+    setFiles,
   } = useContext(AppContext);
-  const [path, setPath] = useState('Files/test/sdsdsd');
-  const [open, setOpen] = useState(false);
-  const [files] = useState(new Array<File>());
-  const [folderName, setFolderName] = useState('');
-
   const response = clientSuspender.read();
 
   useEffect(() => {
@@ -57,16 +58,28 @@ export function Files(): ReactElement {
     if (response.account) {
       setAccount(response.account);
     }
-  }, [response, setAccount, setClient]);
-
-  const mode = useMemo(() => String(Object(location.state)?.mode), [location.state]);
+    if (response.bucket) {
+      setBucket(response.bucket);
+    }
+  }, [response, setAccount, setBucket, setClient]);
 
   const renderPath = useMemo((): ReactElement[] => {
     const parts = path.split('/');
 
+    if (!account || !client) {
+      return [];
+    }
+
     const partElements = [
       <Grid item alignItems="center" key="bucket">
         <BucketSelector />
+      </Grid>,
+      <MoreVert key="icon" fontSize="small" color="secondary" />,
+      <Grid item alignItems="center" key="bucket">
+        <Button variant="text" onClick={() => setPath('')}>
+          {' '}
+          /
+        </Button>
       </Grid>,
       <MoreVert key="icon" fontSize="small" color="secondary" />,
     ];
@@ -83,7 +96,7 @@ export function Files(): ReactElement {
           </Button>
         </Grid>,
       );
-      partElements.push(<ArrowRight color="primary" />);
+      partElements.push(<ArrowRight color="primary" key="arrow" />);
     }
 
     linkPath += parts[parts.length - 1];
@@ -97,120 +110,90 @@ export function Files(): ReactElement {
     );
 
     return partElements;
-  }, [path]);
+  }, [account, client, path, setPath]);
 
-  const loadFiles = useCallback(async () => {
-    // const contentAddressableStorage = await getContentAddressableStorage(mode, privateKey);
-    // const query: Query = {
-    //   bucketId,
-    //   tags: [{ key: 'Path', value: path }],
-    // };
-    // const searchResult = await contentAddressableStorage.search(query);
-    // const loadedFiles = searchResult.pieces
-    //   .filter((p) => p.tags.some((t) => t.key === 'Path' && t.value === path))
-    //   .map((p) => ({
-    //     name: p.tags.find((t) => t.key === 'Name')?.value || '--',
-    //     type: p.tags.find((t) => t.key === 'Type')?.value || '--',
-    //     size: p.tags.find((t) => t.key === 'Size')?.value || '--',
-    //     dateAdded: p.tags.find((t) => t.key === 'Date added')?.value || '--',
-    //     cid: p.tags.find((t) => t.key === 'Type')?.value === 'File' ? u8aToString(p.data) : '',
-    //   }));
-    //
-    // setFiles(loadedFiles);
-  }, []);
+  const loadFilesList = useLoadFiles();
 
-  const handleFileSelect = async ({ target }: ChangeEvent<HTMLInputElement>) => {
+  const uploadHandler = async ({ target }: ChangeEvent<HTMLInputElement>) => {
     const file = target?.files?.[0];
-    await uploadFile(unwrap(account).address, unwrap(client), bucket, unwrap(file));
-    //
-    // const contentAddressableStorage = await getContentAddressableStorage(mode, privateKey);
-    // const fileStorage = await getFileStorage(privateKey);
-    //
-    // const dataPieceUri = await fileStorage.upload(bucketId, file.stream());
-    // console.log(`File. Stored data piece uri=${dataPieceUri.toString()}`);
-    // const metadataPiece: Piece = {
-    //   data: stringToU8a(dataPieceUri.cid),
-    //   tags: [
-    //     { key: 'Type', value: 'File' },
-    //     { key: 'Name', value: file.name },
-    //     {
-    //       key: 'Path',
-    //       value: path,
-    //     },
-    //     { key: 'Size', value: file.size },
-    //   ],
-    //   links: [],
-    // };
-    //
-    // const metadataPieceUri = await contentAddressableStorage.store(bucketId, metadataPiece);
-    // console.log(`File. Stored metadata piece uri=${metadataPieceUri.toString()}`);
-    await loadFiles();
+    await uploadFile(unwrap(account).address, unwrap(client), bucket, unwrap(file), path);
+    await delay(500);
+    await loadFilesList();
   };
 
-  const downloadFile = useCallback(async (name: string, cid: string) => {
-    console.log({ name, cid });
-    // const fileStorage = await getFileStorage(privateKey);
-    // const file = fileStorage.read(bucketId, cid);
-    // const fileReader = file.getReader();
-    //
-    // let result = await fileReader.read();
-    // const chunks = [];
-    // while (!result.done) {
-    //   chunks.push(result.value);
-    //   // eslint-disable-next-line no-await-in-loop
-    //   result = await fileReader.read();
-    // }
-    // const blob = new Blob(chunks);
-    // const url = window.URL.createObjectURL(blob);
-    //
-    // const link = document.createElement('a');
-    // link.href = url;
-    // link.setAttribute('download', name);
-    //
-    // // Append to html link element page
-    // document.body.appendChild(link);
-    //
-    // // Start download
-    // link.click();
-  }, []);
-
-  const doubleClickHandler = useCallback(
-    (file: File) => () => (file.type === 'Folder' ? setPath(`${path}/${file.name}`) : downloadFile(file.name, file.cid)),
-    [downloadFile, path],
+  const changePath = useCallback(
+    async (e: MouseEvent<HTMLElement>) => {
+      const { folder } = e.currentTarget.dataset;
+      setFiles([]);
+      setPath((currentPath: string) => [currentPath, folder].join('/'));
+      await loadFilesList();
+    },
+    [loadFilesList, setFiles, setPath],
   );
 
-  const createFolder = useCallback(async () => {
-    // const contentAddressableStorage = await getContentAddressableStorage(mode, privateKey);
-    //
-    // const piece: Piece = {
-    //   data: stringToU8a(folderName),
-    //   tags: [
-    //     { key: 'Type', value: 'Folder' },
-    //     { key: 'Name', value: folderName },
-    //     { key: 'Path', value: path },
-    //   ],
-    //   links: [],
-    // };
-    // const pieceUri = await contentAddressableStorage.store(bucketId, piece);
-    // console.log(`Folder. Stored piece uri=${pieceUri.toString()}`);
+  const downloadFile = useCallback(
+    async (e: MouseEvent<HTMLElement>) => {
+      const { cid, name } = e.currentTarget.dataset;
+      const file = await readFile(unwrap(client), bucket, unwrap(cid), path);
 
-    setOpen(false);
-    await loadFiles();
-  }, [loadFiles]);
+      const downloadLink = (urlLink: string) => {
+        const link = document.createElement('a');
+        link.href = urlLink;
+        link.setAttribute('download', name ?? '');
+
+        document.body.appendChild(link);
+
+        link.click();
+        setTimeout(() => document.body.removeChild(link), 1000);
+      };
+
+      if (file.data && file.data instanceof ReadableStream) {
+        const fileReader = file.data.getReader();
+        let result = await fileReader.read();
+        const chunks = [];
+        while (!result.done) {
+          chunks.push(result.value);
+          // eslint-disable-next-line no-await-in-loop
+          result = await fileReader.read();
+        }
+        const blob = new Blob(chunks);
+        downloadLink(window.URL.createObjectURL(blob));
+      }
+
+      if (typeof file.data === 'string') {
+        const blob = new Blob([stringToU8a(file.data)]);
+        downloadLink(window.URL.createObjectURL(blob));
+      }
+
+      if (file.data instanceof Uint8Array) {
+        const blob = new Blob([file.data]);
+        downloadLink(window.URL.createObjectURL(blob));
+      }
+    },
+    [bucket, client, path],
+  );
+
+  const submitCreateFolder = useCallback(
+    async (folder: string) => {
+      await createFolder(unwrap(client), bucket, path, folder);
+      await loadFiles(unwrap(client), bucket, path);
+    },
+    [bucket, client, path],
+  );
 
   useEffect(() => {
-    if (!mode) {
-      navigate('/');
+    if (client && bucket) {
+      loadFilesList();
     }
-  }, [mode, navigate]);
-
-  useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
+  }, [bucket, client, loadFilesList, path]);
 
   return (
     <div className={styles.app}>
       <Container fixed>
+        <Box mt={4} display="flex" gap={2} justifyContent="start" alignItems="center">
+          <img alt="" src={cereLogo} />
+          <span>DDC. Cere network</span>
+        </Box>
         <Grid mt={4} container rowSpacing={1} columnSpacing={{ xs: 1, sm: 2, md: 3 }}>
           <Grid item xs={6}>
             <Box display="flex" flexDirection="column" alignItems="left" justifyContent="left">
@@ -231,17 +214,17 @@ export function Files(): ReactElement {
               className="m-6"
             >
               <Stack direction="row" spacing={2} justifyContent="end">
-                <AuthButton>{client ? 'Create another DDC client' : 'Create DDC client'}</AuthButton>
-                <Button variant="contained" onClick={() => setOpen(true)}>
-                  Create folder
-                </Button>
+                <CreateClient>
+                  {client ? 'Create another DDC client' : 'Create DDC client'}
+                </CreateClient>
+                <CreateFolder submit={submitCreateFolder} />
                 <label htmlFor="contained-button-file">
                   <input
                     className={styles.hidden}
                     id="contained-button-file"
                     multiple
                     type="file"
-                    onChange={handleFileSelect}
+                    onChange={uploadHandler}
                   />
                   <Button variant="contained" component="span">
                     Upload
@@ -270,19 +253,41 @@ export function Files(): ReactElement {
                       '&:last-child td, &:last-child th': { border: 0 },
                     }}
                   >
-                    <TableCell onDoubleClick={doubleClickHandler(file)}>
+                    <TableCell sx={{ cursor: 'pointer', textDecoration: 'underline' }}>
                       <Grid container direction="row" alignItems="center">
+                        <ShareButton dekPath={file.type === 'Folder' ? [path, file.name].join('/') : path} />
                         {file.type === 'Folder' ? (
-                          <FolderIcon color="primary" />
+                          <Box
+                            sx={{ display: 'inline-flex', alignItems: 'center', gap: '0 0.2rem' }}
+                            tabIndex={0}
+                            role="link"
+                            data-folder={file.name}
+                            onClick={changePath}
+                          >
+                            <Folder color="primary" />
+                            {file.name}
+                          </Box>
                         ) : (
-                          <InsertDriveFileIcon color="primary" />
+                          <Box
+                            onClick={downloadFile}
+                            data-cid={file.cid}
+                            data-name={file.name}
+                            sx={{ display: 'inline-flex', alignItems: 'center', gap: '0 0.2rem' }}
+                          >
+                            <InsertDriveFile color="primary" /> {file.name}
+                          </Box>
                         )}
-                        {file.name}
                       </Grid>
                     </TableCell>
-                    <TableCell align="right">{file.size}</TableCell>
+                    <TableCell align="right">
+                      {Number(file.size) ? filesize(Number(file.size)).human('jedec') : file.size}
+                    </TableCell>
                     <TableCell align="right">{file.type}</TableCell>
-                    <TableCell align="right">{file.dateAdded}</TableCell>
+                    <TableCell align="right">
+                      {Number(file.dateAdded)
+                        ? new Date(Number(file.dateAdded)).toLocaleString()
+                        : file.dateAdded}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -290,28 +295,6 @@ export function Files(): ReactElement {
           </TableContainer>
         </Grid>
       </Container>
-
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth>
-        <DialogTitle>Create folder</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            id="folderName"
-            label="Name"
-            fullWidth
-            variant="standard"
-            value={folderName}
-            onChange={(e) => {
-              setFolderName(e.target.value);
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={createFolder}>Create</Button>
-        </DialogActions>
-      </Dialog>
     </div>
   );
 }

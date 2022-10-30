@@ -16,18 +16,19 @@ import {
 import { Field, Form } from 'react-final-form';
 import { FORM_ERROR, MutableState, Tools } from 'final-form';
 import {
-  ReactElement, useCallback, useContext, useState,
+  ReactElement, useCallback, useContext, useEffect, useState,
 } from 'react';
 import { mnemonicGenerate } from '@polkadot/util-crypto';
-import { usePromiseHook } from '../../use-promise-hook';
-import { findAccount, loadInjectedAccounts } from '../../utils';
+import { usePromiseHook } from '../../lib/use-promise-hook';
+import { findAccount, loadInjectedAccounts } from '../../lib/utils';
 import { AppContext } from '../../app-context';
-import { createClient } from '../../ddc-operations/operations';
+import { createClient } from '../../lib/ddc/operations';
 import { CopyButton } from './copy-button';
-import { forget, set } from '../../local';
+import { forget, set } from '../../lib/local';
 
 type Props = {
   children: string;
+  onReady?: () => unknown;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,15 +37,20 @@ const generateSecret = (_: any[], state: MutableState<any>, tools: Tools<any>) =
   changeValue(state, 'secret', () => mnemonicGenerate());
 };
 
-export function AuthButton({ children }: Props): ReactElement {
+export function CreateClient({ children, onReady }: Props): ReactElement {
   const [open, setOpen] = useState(false);
-  const {
-    setAccount, setClient, account, client,
-  } = useContext(AppContext);
+  const { setAccount, setClient, account, client } = useContext(AppContext);
   const { data: accounts } = usePromiseHook(loadInjectedAccounts);
+
+  useEffect(() => {
+    if (client) {
+      onReady?.();
+    }
+  }, [client, onReady]);
 
   const forgetClient = useCallback(() => {
     forget('secret');
+    forget('bucket');
     setClient(undefined);
   }, [setClient]);
 
@@ -54,12 +60,13 @@ export function AuthButton({ children }: Props): ReactElement {
       try {
         const userAccount = await findAccount(address);
         const ddcClient = await createClient(userAccount, secret);
-        set('publicKey', address);
+        set('address', address);
         set('secret', secret);
         setAccount(userAccount);
         setClient(ddcClient);
         setOpen(false);
       } catch (e) {
+        console.log({ e });
         return { [FORM_ERROR]: Object(e).message || 'Failed to choose a user.' };
       }
       return null;
@@ -102,9 +109,8 @@ export function AuthButton({ children }: Props): ReactElement {
                           <Select
                             labelId="account-label"
                             onChange={input.onChange}
-                            sx={{ fontFamily: 'monospace' }}
+                            sx={{ fontFamily: 'monospace', width: '100%' }}
                             value={input.value}
-                            autoWidth
                           >
                             {(accounts ?? []).map((userAccount) => (
                               <MenuItem
