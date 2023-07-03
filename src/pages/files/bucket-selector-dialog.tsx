@@ -1,6 +1,8 @@
 import { ReactElement, useCallback, useContext, useMemo } from 'react';
 import {
+  Box,
   Button,
+  CircularProgress,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -12,7 +14,6 @@ import {
   Select,
   Switch,
   TextField,
-  Box, CircularProgress,
 } from '@mui/material';
 import { Field, Form } from 'react-final-form';
 import { MutableState, Tools } from 'final-form';
@@ -22,7 +23,7 @@ import { InferPromiseType } from '../../types';
 import { unwrap } from '../../lib/unwrap';
 import { set } from '../../lib/local';
 
-type BucketsStatuses = InferPromiseType<ReturnType<typeof bucketsList>>['bucketStatuses'];
+type BucketsStatuses = InferPromiseType<ReturnType<typeof bucketsList>>;
 
 type Props = {
   onClose: () => unknown;
@@ -51,24 +52,27 @@ export function BucketSelectorDialog({ onClose, buckets }: Props): ReactElement 
     [bucket],
   );
 
-  const submit = useCallback(async (values: FormProps) => {
-    const { balance, bucket: selectedBucket, create, replication, size } = values;
-    const applyBucketSelection = (bucketId: bigint) => {
-      setBucket(bucketId);
-      set('bucket', bucketId.toString(10));
-    };
-    if (create) {
-      const createdBucket = await createBucket(unwrap(client), {
-        replication,
-        balance: BigInt(balance),
-        size: BigInt(size),
-      });
-      applyBucketSelection(createdBucket);
-    } else if (selectedBucket) {
-      applyBucketSelection(BigInt(selectedBucket));
-    }
-    onClose();
-  }, [client, onClose, setBucket]);
+  const submit = useCallback(
+    async (values: FormProps) => {
+      const { balance, bucket: selectedBucket, create, replication, size } = values;
+      const applyBucketSelection = (bucketId: bigint) => {
+        setBucket(bucketId);
+        set('bucket', bucketId.toString(10));
+      };
+      if (create) {
+        const createdBucket = await createBucket(unwrap(client), {
+          replication,
+          balance: BigInt(balance),
+          size: BigInt(size),
+        });
+        applyBucketSelection(createdBucket);
+      } else if (selectedBucket) {
+        applyBucketSelection(BigInt(selectedBucket));
+      }
+      onClose();
+    },
+    [client, onClose, setBucket],
+  );
 
   return (
     <Form mutators={{ resetBucket }} initialValues={initialValues} onSubmit={submit}>
@@ -172,10 +176,10 @@ export function BucketSelectorDialog({ onClose, buckets }: Props): ReactElement 
                       {(buckets ?? []).map((bucketStatus) => (
                         <MenuItem
                           sx={{ fontFamily: 'monospace' }}
-                          key={bucketStatus.bucket_id}
-                          value={bucketStatus.bucket_id}
+                          key={bucketStatus.bucketId}
+                          value={bucketStatus.bucketId}
                         >
-                          [Bucket]: {bucketStatus.bucket_id}
+                          [Bucket]: {bucketStatus.bucketId}
                         </MenuItem>
                       ))}
                     </Select>
@@ -184,10 +188,19 @@ export function BucketSelectorDialog({ onClose, buckets }: Props): ReactElement 
               </Field>
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'flex-start', padding: '1.5rem' }}>
-              <Button sx={{ gap: '0 .5rem' }} disabled={submitting || pristine} onClick={handleSubmit} variant="outlined">
-                {
-                  submitting ? <><CircularProgress color="inherit" size={20} thickness={2} />{' '}Creating...</> : 'Apply'
-                }
+              <Button
+                sx={{ gap: '0 .5rem' }}
+                disabled={submitting || pristine}
+                onClick={handleSubmit}
+                variant="outlined"
+              >
+                {submitting ? (
+                  <>
+                    <CircularProgress color="inherit" size={20} thickness={2} /> Creating...
+                  </>
+                ) : (
+                  'Apply'
+                )}
               </Button>
               <Button onClick={onClose} variant="text">
                 Cancel

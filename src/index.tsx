@@ -17,4 +17,6 @@ root.render(
   </React.StrictMode>,
 );
 
-reportWebVitals();
+if (process.env.NODE_ENV === 'development') {
+  reportWebVitals();
+}

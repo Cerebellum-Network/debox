@@ -1,4 +1,4 @@
-import { ReactElement, useCallback, useContext, useEffect, useState } from 'react';
+import { ReactElement, useCallback, useContext, useState } from 'react';
 import { Button, Dialog, IconButton } from '@mui/material';
 import { Replay } from '@mui/icons-material';
 import { BucketSelectorDialog } from './bucket-selector-dialog';
@@ -8,15 +8,16 @@ import { unwrap } from '../../lib/unwrap';
 import { usePromiseHook } from '../../lib/use-promise-hook';
 import { useLoadFiles } from './use-load-files';
 
-export function BucketSelector(): ReactElement {
+type Props = {
+  onCreate: () => Promise<unknown>;
+};
+
+export function BucketSelector({ onCreate }: Props): ReactElement {
   const { bucket, account, client } = useContext(AppContext);
   const [reloading, setReloading] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const loadBuckets = useCallback(() => bucketsList(unwrap(client), unwrap(account).address), [
-    account,
-    client,
-  ]);
+  const loadBuckets = useCallback(() => bucketsList(unwrap(account).address), [account]);
 
   const loadFiles = useLoadFiles();
 
@@ -29,16 +30,12 @@ export function BucketSelector(): ReactElement {
     }
   };
 
-  const { data, mutate } = usePromiseHook(loadBuckets);
-  const bucketStatuses = data?.bucketStatuses ?? [];
-  const onClose = useCallback(() => {
+  const { data: bucketStatuses, mutate } = usePromiseHook(loadBuckets);
+  const onClose = useCallback(async () => {
     mutate();
+    await onCreate();
     setOpen(false);
-  }, [mutate]);
-
-  useEffect(() => {
-    console.log({ data });
-  }, [data]);
+  }, [mutate, onCreate]);
 
   return (
     <>
@@ -54,7 +51,7 @@ export function BucketSelector(): ReactElement {
         {bucket ? `Bucket id: [${bucket}]` : 'Select bucket'}
       </Button>
       <Dialog maxWidth="md" fullWidth onClose={() => setOpen(false)} open={open}>
-        <BucketSelectorDialog buckets={bucketStatuses} onClose={onClose} />
+        <BucketSelectorDialog buckets={bucketStatuses ?? []} onClose={onClose} />
       </Dialog>
     </>
   );

@@ -1,6 +1,10 @@
 import { DdcClient, SearchType, Tag } from '@cere-ddc-sdk/ddc-client/browser';
-import { File as DdcFile, Query, DdcUri } from '@cere-ddc-sdk/ddc-client';
+import { DdcUri, File as DdcFile, Piece as DdcPiece, Query } from '@cere-ddc-sdk/ddc-client';
 import { stringToU8a } from '@polkadot/util';
+import { encode } from 'varint';
+import { convertTags } from '../../file';
+
+export const buildPath = (path: string): string => ['Files', path].filter(Boolean).join('/');
 
 export async function uploadFile(
   address: string,
@@ -9,52 +13,75 @@ export async function uploadFile(
   file: File,
   path: string,
 ) {
+  // eslint-disable-next-line no-debugger
   const tags = [
-    new Tag('Path', path),
-    // Tags are searchable by default. In this example piece can be found by `user address`
-    new Tag('userId', address),
-    new Tag('Name', file.name),
-    new Tag('Type', file.type),
-    new Tag('Kind', 'File'),
-    new Tag('Date added', Math.round(new Date().getTime() / 1000).toString()),
-    new Tag('Size', String(file.size), SearchType.NOT_SEARCHABLE),
+    new Tag('path', buildPath(path)),
+    new Tag('file-path', [path, file.name].join('/')),
+    new Tag('kind', 'file', SearchType.NOT_SEARCHABLE),
+    new Tag('user-id', address),
+    new Tag('name', file.name),
+    new Tag('content-type', file.type),
+    new Tag('timestamp', new Uint8Array(encode(Math.round(file.lastModified)))),
+    new Tag('size', String(file.size), SearchType.NOT_SEARCHABLE),
   ];
 
-  // Tags are optional
-  // Data supported types: ReadableStream<Uint8Array> | string | Uint8Array
-  const ddcFile = new DdcFile(file.stream() as any, tags);
+  const ddcFile = new DdcFile(file.stream(), tags);
 
-  const storeOptions = {
-    // True - store encrypted data. False - store unencrypted data.
-    encrypt: true,
-    // If empty or not passed - data will be encrypted by master DEK.
-    dekPath: path,
-  };
+  // disable encryption for a while
+  // const storeOptions = {
+  //   // True - store encrypted data. False - store unencrypted data.
+  //   encrypt: true,
+  //   // If empty or not passed - data will be encrypted by master DEK.
+  //   dekPath: path,
+  // };
 
-  await ddcClient.store(bucketId, ddcFile, storeOptions);
+  await ddcClient.store(bucketId, ddcFile);
 }
 
 export async function createFolder(ddcClient: DdcClient, bucket: bigint, path: string, folder: string) {
   const tags = [
-    new Tag('Path', path),
-    // Tags are searchable by default. In this example piece can be found by `user address`
-    new Tag('Name', folder),
-    new Tag('Type', 'Folder'),
-    new Tag('Kind', 'Folder'),
+    new Tag('path', buildPath(path)),
+    new Tag('name', folder),
+    new Tag('kind', 'folder', SearchType.NOT_SEARCHABLE),
   ];
   const ddcFile = new DdcFile(stringToU8a(folder), tags);
-  await ddcClient.store(bucket, ddcFile, { encrypt: true, dekPath: path });
+  await ddcClient.store(bucket, ddcFile);
 }
 
-export async function loadFiles(ddcClient: DdcClient, bucketId: bigint, path: string) {
+type Piece = Pick<DdcPiece, 'data' | 'cid'> & {
+  tags: { key: string; value: string | number }[];
+};
+
+const sort = (a: Piece, b: Piece) => {
+  const aNameTag = a.tags.find((t) => t.key === 'name') ?? { key: 'name', value: 'unknown' };
+  const bNameTag = b.tags.find((t) => t.key === 'name') ?? { key: 'name', value: 'unknown' };
+  return aNameTag.value.toString().toLowerCase().localeCompare(bNameTag.value.toString().toLowerCase());
+};
+
+export async function loadFiles(ddcClient: DdcClient, bucketId: bigint, path: string): Promise<Piece[]> {
   const query: Query = {
     bucketId,
-    tags: [new Tag('Path', path)],
+    tags: [new Tag('path', buildPath(path))],
     skipData: false,
   };
-  return ddcClient.search(query);
+  const files: Piece[] = [];
+  const folders: Piece[] = [];
+  (await ddcClient.search(query).catch(() => [])).forEach((ddcPiece) => {
+    const tags = convertTags(ddcPiece.tags);
+    const piece = { data: ddcPiece.data, tags, cid: ddcPiece.cid, links: ddcPiece.links };
+    const kind = tags.find((tag) => tag.key === 'kind');
+    if (kind?.value === 'file') {
+      files.push(piece);
+    } else if (kind?.value === 'folder') {
+      folders.push(piece);
+    }
+  });
+  files.sort(sort);
+  folders.sort(sort);
+  folders.push(...files);
+  return folders;
 }
 
-export async function readFile(ddcClint: DdcClient, bucket: bigint, cid: string, path: string) {
-  return ddcClint.read(DdcUri.build(bucket, cid), { decrypt: true, dekPath: path });
+export async function readFile(ddcClint: DdcClient, bucket: bigint, cid: string) {
+  return ddcClint.read(DdcUri.build(bucket, cid));
 }

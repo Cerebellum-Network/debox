@@ -1,5 +1,6 @@
 import { Tag } from '@cere-ddc-sdk/ddc-client/browser';
 import { u8aToString } from '@polkadot/util';
+import { decode } from 'varint';
 
 export class File {
   constructor(
@@ -11,6 +12,9 @@ export class File {
   ) {}
 }
 
-export function convertTags(tags: Tag[]): { key: string; value: string }[] {
-  return tags.map((tag) => ({ key: u8aToString(tag.key), value: u8aToString(tag.value) }));
+export function convertTags(tags: Tag[]): { key: string; value: string | number }[] {
+  return tags.map((tag) => {
+    const key = u8aToString(tag.key);
+    return ({ key, value: key === 'timestamp' ? decode(tag.value) : u8aToString(tag.value) });
+  });
 }

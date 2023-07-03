@@ -4,9 +4,10 @@ import { Form, Field } from 'react-final-form';
 
 type Props = {
   submit: (folder: string) => Promise<void>;
+  disabled?: boolean;
 };
 
-export function CreateFolder({ submit: save }: Props): ReactElement {
+export function CreateFolder({ disabled = false, submit: save }: Props): ReactElement {
   const [open, setOpen] = useState(false);
 
   const submit = useCallback(async ({ folder }: { folder: string }) => {
@@ -19,7 +20,7 @@ export function CreateFolder({ submit: save }: Props): ReactElement {
 
   return (
     <>
-      <Button variant="contained" onClick={() => setOpen(true)}>
+      <Button disabled={disabled} variant="contained" onClick={() => setOpen(true)}>
         Create folder
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth>

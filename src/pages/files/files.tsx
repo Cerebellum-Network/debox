@@ -1,5 +1,16 @@
 /* eslint-disable jsx-a11y/click-events-have-key-events */
-import { ChangeEvent, MouseEvent, ReactElement, useCallback, useContext, useEffect, useMemo } from 'react';
+import {
+  ChangeEvent,
+  Fragment,
+  memo,
+  MouseEvent,
+  ReactElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   Box,
   Button,
@@ -15,56 +26,52 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material';
-import { ArrowRight, Folder, InsertDriveFile, MoreVert } from '@mui/icons-material';
+import { Folder, InsertDriveFile, MoreVert } from '@mui/icons-material';
 import filesize from 'file-size';
 import { stringToU8a } from '@polkadot/util';
-
+import { useNavigate } from 'react-router-dom';
 import { useStyles } from '../../styles';
 import { AppContext } from '../../app-context';
 import { CreateClient } from './create-client';
-import { initClient } from '../../lib/ddc/operations';
 import { createFolder, loadFiles, readFile, uploadFile } from '../../lib/ddc/files';
 import { unwrap } from '../../lib/unwrap';
 import { BucketSelector } from './bucket-selector';
-import { createSuspender } from '../../lib/create-suspender';
 import { CreateFolder } from './create-folder';
 import { delay } from '../../lib/delay';
 import { useLoadFiles } from './use-load-files';
-import { ShareButton } from './share-button';
 import cereLogo from '../cere-logo.svg';
+import { decimals } from '../../blockchain/config';
+import { createApi } from '../../blockchain/tools';
 
-const clientSuspender = createSuspender(initClient);
-
-export function Files(): ReactElement {
+export const Files = memo((): ReactElement => {
   const styles = useStyles();
-  const {
-    client,
-    bucket,
-    setBucket,
-    account,
-    setAccount,
-    setClient,
-    path,
-    setPath,
-    files,
-    setFiles,
-  } = useContext(AppContext);
-  const response = clientSuspender.read();
+  const [balance, setBalance] = useState(0);
+  const { client, bucket, account, path, setPath, files, setFiles } = useContext(AppContext);
+  const navigate = useNavigate();
+
+  const updateBalance = useCallback(async () => {
+    if (account?.address) {
+      const api = await createApi();
+      const response = await api.query.system.account(account?.address);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = response.toJSON() as any;
+      setBalance(data.free / 10 ** decimals);
+      await api.disconnect();
+    }
+  }, [account?.address]);
 
   useEffect(() => {
-    if (response.client) {
-      setClient(response.client);
-    }
-    if (response.account) {
-      setAccount(response.account);
-    }
-    if (response.bucket) {
-      setBucket(response.bucket);
-    }
-  }, [response, setAccount, setBucket, setClient]);
+    updateBalance().then(() => null);
+  }, [updateBalance]);
 
-  const renderPath = useMemo((): ReactElement[] => {
-    const parts = path.split('/');
+  useEffect(() => {
+    if (client == null) {
+      navigate('/');
+    }
+  }, [client, navigate]);
+
+  const currentFilePath = useMemo((): ReactElement[] => {
+    const parts = path.split('/').filter(Boolean);
 
     if (!account || !client) {
       return [];
@@ -72,45 +79,40 @@ export function Files(): ReactElement {
 
     const partElements = [
       <Grid item alignItems="center" key="bucket">
-        <BucketSelector />
+        <BucketSelector onCreate={updateBalance} />
       </Grid>,
-      <MoreVert key="icon" fontSize="small" color="secondary" />,
-      <Grid item alignItems="center" key="bucket">
-        <Button variant="text" onClick={() => setPath('')}>
-          {' '}
-          /
-        </Button>
-      </Grid>,
-      <MoreVert key="icon" fontSize="small" color="secondary" />,
     ];
+
+    if (bucket > 0n) {
+      partElements.push(
+        <Fragment key="bucket-controls">
+          <MoreVert key="more-vert-icon" fontSize="small" color="secondary" />
+          <Grid item alignItems="center" key="bucket">
+            <Button variant="text" onClick={() => setPath('')}>
+              /
+            </Button>
+          </Grid>
+        </Fragment>,
+      );
+    }
+
     let linkPath = '';
-    for (let i = 0; i < parts.length - 1; i += 1) {
-      const folderPath = linkPath + parts[i];
+    for (let i = 0; i < parts.length; i += 1) {
+      const folderPath = [linkPath, parts[i]].join('/');
       linkPath += `${parts[i]}/`;
 
       partElements.push(
         <Grid item alignItems="center" key={linkPath}>
-          <Button variant="text" onClick={() => setPath(folderPath)}>
+          <Button variant="text" onClick={i < parts.length ? () => setPath(folderPath) : undefined}>
             {' '}
             {parts[i]}
           </Button>
         </Grid>,
       );
-      partElements.push(<ArrowRight color="primary" key="arrow" />);
     }
 
-    linkPath += parts[parts.length - 1];
-    partElements.push(
-      <Grid item alignItems="center" key={linkPath}>
-        <Button variant="text" onClick={() => setPath(linkPath)}>
-          {' '}
-          {parts[parts.length - 1]}
-        </Button>
-      </Grid>,
-    );
-
     return partElements;
-  }, [account, client, path, setPath]);
+  }, [account, bucket, client, path, setPath, updateBalance]);
 
   const loadFilesList = useLoadFiles();
 
@@ -119,6 +121,7 @@ export function Files(): ReactElement {
     await uploadFile(unwrap(account).address, unwrap(client), bucket, unwrap(file), path);
     await delay(500);
     await loadFilesList();
+    await updateBalance();
   };
 
   const changePath = useCallback(
@@ -134,7 +137,7 @@ export function Files(): ReactElement {
   const downloadFile = useCallback(
     async (e: MouseEvent<HTMLElement>) => {
       const { cid, name } = e.currentTarget.dataset;
-      const file = await readFile(unwrap(client), bucket, unwrap(cid), path);
+      const file = await readFile(unwrap(client), bucket, unwrap(cid));
 
       const downloadLink = (urlLink: string) => {
         const link = document.createElement('a');
@@ -170,36 +173,42 @@ export function Files(): ReactElement {
         downloadLink(window.URL.createObjectURL(blob));
       }
     },
-    [bucket, client, path],
+    [bucket, client],
   );
 
   const submitCreateFolder = useCallback(
     async (folder: string) => {
       await createFolder(unwrap(client), bucket, path, folder);
       await loadFiles(unwrap(client), bucket, path);
+      await updateBalance();
     },
-    [bucket, client, path],
+    [bucket, client, path, updateBalance],
   );
 
   useEffect(() => {
     if (client && bucket) {
-      loadFilesList();
+      loadFilesList().catch(() => null);
     }
   }, [bucket, client, loadFilesList, path]);
 
   return (
     <div className={styles.app}>
       <Container fixed>
-        <Box mt={4} display="flex" gap={2} justifyContent="start" alignItems="center">
-          <img alt="" src={cereLogo} />
-          <span>DDC. Cere network</span>
+        <Box mt={4} display="flex" alignItems="center">
+          <Box display="flex" gap={2} justifyContent="start" alignItems="center">
+            <img alt="" src={cereLogo} />
+            <span>DDC. Cere network</span>
+          </Box>
+          <Box ml="auto">
+            <b>{account?.meta.name}:</b> {balance} CERE
+          </Box>
         </Box>
         <Grid mt={4} container rowSpacing={1} columnSpacing={{ xs: 1, sm: 2, md: 3 }}>
           <Grid item xs={6}>
             <Box display="flex" flexDirection="column" alignItems="left" justifyContent="left">
               <ButtonGroup>
                 <Grid container direction="row" alignItems="center">
-                  {renderPath}
+                  {currentFilePath}
                 </Grid>
               </ButtonGroup>
             </Box>
@@ -217,16 +226,17 @@ export function Files(): ReactElement {
                 <CreateClient>
                   {client ? 'Create another DDC client' : 'Create DDC client'}
                 </CreateClient>
-                <CreateFolder submit={submitCreateFolder} />
+                <CreateFolder disabled={bucket === 0n} submit={submitCreateFolder} />
                 <label htmlFor="contained-button-file">
                   <input
                     className={styles.hidden}
                     id="contained-button-file"
+                    disabled={bucket === 0n}
                     multiple
                     type="file"
                     onChange={uploadHandler}
                   />
-                  <Button variant="contained" component="span">
+                  <Button disabled={bucket === 0n} variant="contained" component="span">
                     Upload
                   </Button>
                 </label>
@@ -242,7 +252,7 @@ export function Files(): ReactElement {
                   <TableCell>Name</TableCell>
                   <TableCell align="right">Size</TableCell>
                   <TableCell align="right">Kind</TableCell>
-                  <TableCell align="right">Date added</TableCell>
+                  <TableCell align="right">Last modified</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -255,8 +265,8 @@ export function Files(): ReactElement {
                   >
                     <TableCell sx={{ cursor: 'pointer', textDecoration: 'underline' }}>
                       <Grid container direction="row" alignItems="center">
-                        <ShareButton dekPath={file.type === 'Folder' ? [path, file.name].join('/') : path} />
-                        {file.type === 'Folder' ? (
+                        {/* <ShareButton dekPath={file.type === 'Folder' ? [path, file.name].join('/') : path} /> */}
+                        {file.type === 'folder' ? (
                           <Box
                             sx={{ display: 'inline-flex', alignItems: 'center', gap: '0 0.2rem' }}
                             tabIndex={0}
@@ -284,9 +294,7 @@ export function Files(): ReactElement {
                     </TableCell>
                     <TableCell align="right">{file.type}</TableCell>
                     <TableCell align="right">
-                      {Number(file.dateAdded)
-                        ? new Date(Number(file.dateAdded)).toLocaleString()
-                        : file.dateAdded}
+                      {Number(file.dateAdded) ? new Date(Number(file.dateAdded)).toLocaleString() : file.dateAdded}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -297,4 +305,4 @@ export function Files(): ReactElement {
       </Container>
     </div>
   );
-}
+});

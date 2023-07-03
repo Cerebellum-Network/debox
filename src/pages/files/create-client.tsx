@@ -39,7 +39,7 @@ const generateSecret = (_: any[], state: MutableState<any>, tools: Tools<any>) =
 
 export function CreateClient({ children, onReady }: Props): ReactElement {
   const [open, setOpen] = useState(false);
-  const { setAccount, setClient, account, client } = useContext(AppContext);
+  const { setAccount, setClient, account, client, setBucket, setFiles } = useContext(AppContext);
   const { data: accounts } = usePromiseHook(loadInjectedAccounts);
 
   useEffect(() => {
@@ -64,14 +64,17 @@ export function CreateClient({ children, onReady }: Props): ReactElement {
         set('secret', secret);
         setAccount(userAccount);
         setClient(ddcClient);
+        setBucket(0n);
+        setFiles([]);
         setOpen(false);
       } catch (e) {
+        // eslint-disable-next-line no-console
         console.log({ e });
         return { [FORM_ERROR]: Object(e).message || 'Failed to choose a user.' };
       }
       return null;
     },
-    [setAccount, setClient],
+    [setAccount, setBucket, setClient, setFiles],
   );
 
   return (

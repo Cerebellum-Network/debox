@@ -1,5 +1,5 @@
 import {
-  createContext, ReactElement, ReactNode, useMemo, useState,
+  createContext, ReactElement, ReactNode, useCallback, useMemo, useState,
 } from 'react';
 import { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import { DdcClient } from '@cere-ddc-sdk/ddc-client';
@@ -8,8 +8,6 @@ import { File } from './file';
 export const AppContext = createContext<{
   account: InjectedAccountWithMeta | undefined;
   setAccount:(account: InjectedAccountWithMeta) => unknown;
-  privateKey: string;
-  setPrivateKey: (key: string) => unknown;
   path: string;
   setPath: (key: string | ((path: string) => string)) => unknown;
   bucket: bigint;
@@ -21,10 +19,8 @@ export const AppContext = createContext<{
 }>({
       account: undefined,
       setAccount: () => null,
-      path: 'Files',
+      path: '',
       setPath: () => null,
-      privateKey: '',
-      setPrivateKey: () => null,
       bucket: 0n,
       setBucket: () => null,
       client: undefined,
@@ -35,17 +31,26 @@ export const AppContext = createContext<{
 
 export function AppContextProvider({ children }: { children: ReactNode }): ReactElement {
   const [client, setClient] = useState<DdcClient | undefined>();
-  const [path, setPath] = useState('Files');
-  const [bucket, setBucket] = useState(0n);
+  const [path, setPath] = useState('');
+  const [bucket, setBucketState] = useState(0n);
   const [files, setFiles] = useState<File[]>([]);
-  const [account, setAccount] = useState<InjectedAccountWithMeta | undefined>();
-  const [privateKey, setPrivateKey] = useState(String(process.env.REACT_APP_PRIVATE_KEY));
+  const [account, setAccountState] = useState<InjectedAccountWithMeta | undefined>();
+
+  const setAccount = useCallback((user: InjectedAccountWithMeta) => {
+    setPath('');
+    setBucketState(0n);
+    setAccountState(user);
+  }, []);
+
+  const setBucket = useCallback((bucketId: bigint) => {
+    setPath('');
+    setBucketState(bucketId);
+  }, []);
+
   const ctx = useMemo(
     () => ({
       account,
       setAccount,
-      privateKey,
-      setPrivateKey,
       bucket,
       setBucket,
       client,
@@ -55,7 +60,7 @@ export function AppContextProvider({ children }: { children: ReactNode }): React
       files,
       setFiles,
     }),
-    [account, bucket, client, files, path, privateKey],
+    [account, bucket, client, files, path, setAccount, setBucket],
   );
   return (
     <AppContext.Provider value={ctx}>

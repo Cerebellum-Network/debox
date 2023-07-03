@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-var-requires,import/no-extraneous-dependencies */
 const { loaderByName, addBeforeLoaders, addPlugins } = require('@craco/craco');
 const webpack = require('webpack');
+const dotenv = require('dotenv');
+const path = require('node:path');
+
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 module.exports = {
   webpack: {
@@ -23,6 +27,10 @@ module.exports = {
         }),
       ]);
       addBeforeLoaders(webpackConfig, loaderByName('babel-loader'), mjsRule);
+      // eslint-disable-next-line no-param-reassign
+      webpackConfig.devtool = 'source-map';
+      // eslint-disable-next-line no-param-reassign
+      webpackConfig.ignoreWarnings = [/Failed to parse source map/];
       return webpackConfig;
     },
   },
