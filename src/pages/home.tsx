@@ -1,4 +1,4 @@
-import { ReactElement, useCallback } from 'react';
+import { ReactElement, useCallback, useContext, useEffect } from 'react';
 import { Container, Stack, Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
@@ -6,14 +6,22 @@ import cereLogo from './cere-logo.svg';
 
 import { useStyles } from '../styles';
 import { CreateClient } from './files/create-client';
+import { AppContext } from '../app-context';
 
 export function Home(): ReactElement {
   const styles = useStyles();
+  const { client } = useContext(AppContext);
   const navigate = useNavigate();
 
-  const toFrontend = useCallback(() => {
+  const toFiles = useCallback(() => {
     navigate('/files');
   }, [navigate]);
+
+  useEffect(() => {
+    if (client) {
+      toFiles();
+    }
+  }, [client, toFiles]);
 
   return (
     <div className={styles.app}>
@@ -23,7 +31,7 @@ export function Home(): ReactElement {
           <span>DDC. Cere network</span>
         </Box>
         <Stack spacing={2} justifyContent="center" alignItems="center" direction="row" pt={3}>
-          <CreateClient onReady={toFrontend}>Connect to DDC</CreateClient>
+          <CreateClient onReady={toFiles}>Connect to DDC</CreateClient>
         </Stack>
         <Box mt={6}>
           <Typography variant="body2">

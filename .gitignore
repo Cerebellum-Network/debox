@@ -7,3 +7,4 @@
 *.iws
 
 node_modules/
+build/

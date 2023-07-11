@@ -1,23 +1,24 @@
 import { useCallback, useContext } from 'react';
-import { loadFiles } from '../../lib/ddc/files';
+import { buildPath, loadFiles } from '../../lib/ddc/files';
 import { unwrap } from '../../lib/unwrap';
-import { convertTags, File } from '../../file';
+import { File as DdcFile } from '../../file';
 import { AppContext } from '../../app-context';
 
 export function useLoadFiles() {
   const { client, bucket, path, setFiles } = useContext(AppContext);
   return useCallback(async () => {
     const pieces = await loadFiles(unwrap(client), bucket, path);
+    const resultPath = buildPath(path);
     const loadedFiles = pieces
-      .filter((piece) => convertTags(piece.tags).some((t) => t.key === 'Path' && t.value === path))
+      .filter((piece) => piece.tags.some((t) => t.key === 'path' && t.value === resultPath))
       .map((piece) => {
-        const tags = convertTags(piece.tags);
-        return new File(
-          tags.find((tag) => tag.key === 'Name')?.value || '--',
-          tags.find((tag) => tag.key === 'Type')?.value || '--',
-          tags.find((tag) => tag.key === 'Size')?.value || '',
-          tags.find((tag) => tag.key === 'Date added')?.value || '--',
-          tags.find((t) => t.key === 'Kind')?.value === 'File' ? piece.cid : '',
+        const { tags } = piece;
+        return new DdcFile(
+          tags.find((tag) => tag.key === 'name')?.value?.toString() || '--',
+          tags.find((tag) => tag.key === 'kind')?.value?.toString() || '--',
+          tags.find((tag) => tag.key === 'size')?.value?.toString() || '',
+          tags.find((tag) => tag.key === 'timestamp')?.value?.toString() || '--',
+          tags.find((t) => t.key === 'kind')?.value === 'file' ? piece.cid : '',
         );
       });
     setFiles(loadedFiles);
