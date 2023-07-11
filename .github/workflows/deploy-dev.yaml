@@ -4,6 +4,9 @@ on:
     branches:
       - main
 
+env:
+  NPM_TOKEN: ${{secrets.NPM_TOKEN}}
+
 jobs:
   build-and-deploy:
     uses: Cerebellum-Network/reusable-workflows/.github/workflows/build-and-upload-static.yaml@master
@@ -14,8 +17,6 @@ jobs:
       install_packages_command: 'yarn'
       build_command: 'yarn build'
       path_to_static_files_to_upload: 'build'
-      env:
-        NPM_TOKEN: ${{secrets.NPM_TOKEN}}
     secrets:
       NPM_TOKEN: ${{secrets.NPM_TOKEN}}
       NETWORK_AWS_ACCESS_KEY_ID: ${{ secrets.DEV_NETWORK_AWS_ACCESS_KEY_ID }}
