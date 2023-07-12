@@ -15,7 +15,7 @@ jobs:
     with:
       build_container: 'node:18-buster'
       install_packages_command: 'yarn'
-      build_command: 'export NODE_ENV=production yarn build'
+      build_command: 'NODE_ENV=production yarn build'
       path_to_static_files_to_upload: 'build'
       aws_account_id: ${{ vars.DEV_NETWORK_AWS_ACCOUNT_ID }}
       s3_bucket_name: "ddc-file-manager-dev.network-dev.aws.cere.io"
