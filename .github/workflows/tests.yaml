@@ -2,7 +2,7 @@ name: 'Run tests'
 on: [ pull_request ]
 jobs:
   test:
-    runs-on: [self-hosted, cere-network-large-workers]
+    runs-on: [self-hosted, cere-network-large]
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@v1'
